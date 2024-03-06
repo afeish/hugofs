@@ -1,0 +1,14 @@
+[randrw]
+rw=randrw
+rwmixread=70
+rwmixwrite=30
+numjobs=4
+bs=4k
+ioengine=libaio
+iodepth=32
+time_based
+runtime=60
+direct=1
+filename_format=__testfile'$jobnum'
+thread
+directory=/home/ubuntu/gaia

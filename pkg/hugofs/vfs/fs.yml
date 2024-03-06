@@ -1,0 +1,34 @@
+name: _dir1
+size: 4096
+mode: 0644
+is_directory: true
+entries:
+- name: _dir2
+  size: 4096
+  mode: 0644
+  is_directory: true
+- name: _dir3
+  size: 4096
+  mode: 0644
+  is_directory: true
+  entries:
+  - name: bar.txt
+    size: 16
+    mode: 0644
+    is_directory: false
+- name: foo.txt
+  size: 20
+  mode: 0644
+  is_directory: false
+---
+
+name: _hello.txt
+size: 16
+mode: 0644
+is_directory: false
+
+---
+name: _dir4
+size: 4096
+mode: 0644
+is_directory: true

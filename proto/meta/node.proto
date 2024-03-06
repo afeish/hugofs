@@ -1,0 +1,284 @@
+syntax = "proto3";
+
+package hugo.v1.meta;
+option go_package = "github.com/afeish/hugo/rpc/pb/meta";
+import "google/protobuf/timestamp.proto";
+
+// RawNodeService implements the base inode service,
+// to help client do something meticulous work,
+// and it is also the most important component of the meta server,
+// any other high and convenient service will depend on it.
+//
+// In a simple word, it is a node-based service.
+service RawNodeService {
+	// IfExistsInode check if the inode exists.
+	rpc IfExistsInode (IfExistsInode.Request) returns (IfExistsInode.Response);
+	// GetInodeAttr returns the attributes of the specified inode.
+	rpc GetInodeAttr (GetInodeAttr.Request) returns (GetInodeAttr.Response);
+	// Lookup returns the attributes of specified inode which under the given inode.
+	rpc Lookup (Lookup.Request) returns (Lookup.Response);
+	// ListItemUnderInode returns the items under the specified inode.
+	rpc ListItemUnderInode (ListItemUnderInode.Request) returns (ListItemUnderInode.Response);
+	// UpdateInodeAttr update the attr of the specified inode, return the right attr.
+	rpc UpdateInodeAttr (UpdateInodeAttr.Request) returns (UpdateInodeAttr.Response);
+	// DeleteInode delete the specified inode, if the inode is a dir, it will return an error.
+	rpc DeleteInode (DeleteInode.Request) returns (DeleteInode.Response);
+	// DeleteDirInode deletes a directory inode.
+	// If the directory is not empty and the request is not set as recursively, it will return an error.
+	rpc DeleteDirInode (DeleteDirInode.Request) returns (DeleteDirInode.Response);
+	// CreateInode will create a brand new inode with the given attributes.
+	rpc CreateInode (CreateInode.Request) returns (CreateInode.Response);
+	// Link will make a hard link to the old inode with the given attributes
+	rpc Link(Link.Request) returns (Link.Response);
+	// Rename move an entry from a source directory to another with given name.
+	// The targeted entry will be overwrited if it's a file or empty directory.
+	rpc Rename (Rename.Request) returns (Rename.Response);
+	// AcquireFileLock will acquire a file lock.
+	rpc AcquireFileLock(AcquireFileLock.Request) returns (AcquireFileLock.Request);
+	// GetFileLock will acquire a file lock.
+	rpc GetFileLock(GetFileLock.Request) returns (GetFileLock.Response);
+	// DelFileLock will release a file lock.
+	rpc DelFileLock(DelFileLock.Request) returns (DelFileLock.Response);
+	// GetFileLocks will get all file locks.
+	rpc GetFileLocks(GetFileLocks.Request) returns (GetFileLocks.Response);
+}
+
+//////////////////////////////////////////////////
+
+// Attr represents the attributes of one inode.
+message Attr {
+	// Total size, in bytes.
+	// This field gives the size of the file (if it is a regular
+	// file or a symbolic link) in bytes.
+	// The size of a symbolic link is the length of the pathname it contains,
+	// without a terminating null byte.
+	uint64 size = 1;
+	// This is the time of last modification of file data.
+	int64 mtime = 2;
+	uint32 mtimens = 3;
+	// This is the time of the last access of file data.
+	int64 atime = 4;
+	uint32 atimens = 5;
+	// This is the file's last status change timestamp (time of last change to the inode).
+	int64 ctime = 6;
+	uint32 ctimens = 7;
+	// User ID of owner
+	uint32 uid = 8;
+	// Group ID of owner
+	uint32 gid = 9;
+	// mode represents file permission mode.
+	uint32 mode = 10;
+	// nlink represents the number of hard links to the file.
+	uint32 nlink = 11; // reduce modified
+	// If this file (inode) represents a device, then the inode records the major and minor ID of that device.
+	uint32 rdev = 12;
+	// inode represents the number of inode.
+	uint64 inode = 13;
+	// link_target represents the target of a symbolic link.
+	string link_target = 22;
+	// ioctl permissions
+	uint32 flags = 23;
+	// current modified version.
+	uint32 epoch = 24;
+}
+
+//////////////////////////////////////////////////
+
+message ModifyAttr {
+	optional uint64 size = 2;
+	optional int64 atime = 3;
+	optional uint32 atimens = 4;
+	optional int64 mtime = 5;
+	optional uint32 mtimens = 6;
+	optional int64 ctime = 7;
+	optional uint32 ctimens = 8;
+	optional uint32 uid = 9;
+	optional uint32 gid = 10;
+	optional uint32 mode = 11;
+	optional uint32 nlink = 12;
+	optional uint32 rdev = 13;
+	optional string link_target = 14;
+	optional uint32 flags = 23;
+}
+
+//////////////////////////////////////////////////
+
+message IfExistsInode {
+	message Request {
+		uint64 ino = 1;
+	}
+	message Response {}
+}
+
+//////////////////////////////////////////////////
+
+message GetInodeAttr {
+	message Request {
+		uint64 ino = 1;
+	}
+	message Response {
+		uint64 parent_ino = 1;
+		string name = 2;
+		Attr attr = 3;
+	}
+}
+
+//////////////////////////////////////////////////
+
+message Lookup {
+	message Request {
+		uint64 parent_ino = 1;
+		string item_name = 2;
+	}
+	message Response {
+		Attr attr = 1;
+	}
+}
+
+
+//////////////////////////////////////////////////
+
+message ListItemUnderInode {
+	message Item {
+		uint64 ino = 1;
+		string name = 2;
+		uint32 mode = 3;
+		// if in normal request, attr field will be empty
+		optional Attr attr = 4;
+	}
+	message Request {
+		// under which inode
+		uint64 ino = 1;
+		bool recursively = 2;
+		// start_from_ino start list from which ino.
+		uint64 start_from_ino = 3;
+		// limit the number of items to list.
+		uint64 limit = 4;
+		// is is_plus_mode set,function  will retrieve some external info.
+		bool is_plus_mode = 5;
+	}
+	message Response {
+		repeated Item items = 3;
+	}
+}
+
+
+//////////////////////////////////////////////////
+
+message UpdateInodeAttr {
+	message Request {
+		uint64 ino = 1;
+		optional uint32 set = 2;
+		ModifyAttr attr = 3;
+	}
+	message Response {
+		Attr attr = 1;
+	}
+}
+
+//////////////////////////////////////////////////
+
+message DeleteInode {
+	message Request {
+		uint64 parent_ino = 1;
+		string name = 2;
+	}
+	message Response {}
+}
+
+//////////////////////////////////////////////////
+
+message DeleteDirInode {
+	message Request {
+		uint64 parent_ino = 1;
+		string name = 2;
+		bool recursively = 3;
+	}
+	message Response {}
+}
+
+//////////////////////////////////////////////////
+
+message CreateInode {
+	message Request {
+		uint64 parent_ino = 1;
+		string item_name = 2;
+		ModifyAttr attr = 3;
+	}
+	message Response {
+		Attr attr = 1;
+	}
+}
+
+
+//////////////////////////////////////////////////
+
+message Link {
+	message Request {
+		uint64 ino = 1;
+		uint64 new_parent_ino = 2;
+		string new_name = 3;
+	}
+	message Response {
+		Attr attr = 1;
+	}
+}
+
+//////////////////////////////////////////////////
+message Entry {
+	string name = 1;
+	uint64 parent_ino = 2;
+	Attr attr = 3;
+}
+
+
+message Rename {
+	message Request {
+		uint64 parent_src_ino = 1;
+		string old_name = 2;
+		uint64 parent_dst_ino = 3;
+		string new_name = 4;
+		uint32 flags = 5;
+	}
+	message Response {
+		Entry old_entry = 1;
+		Entry new_entry = 2;
+		uint64 deletedIno = 3;
+	}
+}
+
+
+//////////////////////////////////////////////////
+
+enum LockKind {F_RDLCK = 0; F_WRLCK = 1; F_UNLCK = 2;}
+enum LockFlag {LOCK_SH = 0; LOCK_EX = 1;}
+message FileLock {
+	uint64 ino = 1; // inode number
+	uint64 owner = 2; // who owns the lock
+	uint32 pid = 3; // one owner may open multiple times file
+	uint64 start = 4; // start position of the locked region, include
+	uint64 end = 5; // end position of the locked region, not include
+	LockKind kind = 6; // F_RDLCK, F_WRLCK, F_UNLCK
+	LockFlag flag = 7; // LOCK_SH, LOCK_EX
+	uint64 expire_time = 8; // set expire time on the lock to avoid deadlock
+}
+message AcquireFileLock {
+	message Request {FileLock lock = 1;}
+	message Response {}
+}
+message GetFileLock {
+	message Request {
+		uint64 ino = 1;
+		uint64 owner = 2;
+		uint32 pid = 3;
+	}
+	message Response {FileLock locks = 1;}
+}
+message DelFileLock {
+	message Request {uint64 ino = 1;uint64 owner = 2;uint32 pid = 3;}
+	message Response {}
+}
+message GetFileLocks {
+	message Request {uint64 ino = 1;}
+	message Response {repeated FileLock locks = 1;}
+}

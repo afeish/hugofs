@@ -1,0 +1,62 @@
+syntax = "proto3";
+
+package hugo.v1.storage;
+option go_package = "github.com/afeish/hugo/rpc/pb/storage";
+
+service VolumeService {
+	rpc MountVolume(MountVolume.Request) returns (MountVolume.Response);
+	rpc GetVolume(GetVolume.Request) returns (GetVolume.Response);
+	rpc ListVolumes(ListVolumes.Request) returns (ListVolumes.Response);
+}
+
+enum EngineType {
+	INVALID = 0;
+	FS = 1; // local fs
+	INMEM = 2; // in-memory fs
+}
+
+message MountVolume {
+	message Request {
+		uint64 id = 1; // identify a physical volume
+		EngineType type = 2; // volume type
+		string prefix = 3; // location of the mount point
+		optional uint64 quota = 4; // quota of storage size
+		optional double threhold = 5; // max threhold when triggering the eviction
+	}
+	message Response {
+		uint64 node_id = 1;
+	}
+}
+message GetVolume {
+	message PrefixQuery {
+		EngineType type = 2; // volume type
+		string prefix = 3; // location of the mount point
+	}
+	message Request {
+		oneof Query {
+			PrefixQuery query = 1;
+			uint64 id = 2;
+		}
+	}
+	message Response {
+		PhysicalVolume volume = 1;
+	}
+}
+message ListVolumes {
+	message Request {}
+	message Response {
+		repeated PhysicalVolume volumes = 1;
+	}
+}
+
+message PhysicalVolume {
+	uint64 id = 1; // identify a physical volume
+	EngineType type = 2; // volume type
+	string prefix = 3; // location of the mount point
+	uint64 quota = 4; // quota of storage size
+	double threhold = 5; // max threhold when triggering the eviction
+	uint64 inuse_bytes = 6; // max threhold when triggering the eviction
+	uint64 node_id = 7; // storage node of the physical volume
+	uint64 created_at = 8; // created time of the physical volume
+	bool lock = 9; // when the physical volume is locked, it cannot be used; we should lock it when do gc.
+}

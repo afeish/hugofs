@@ -1,0 +1,144 @@
+syntax = "proto3";
+
+package hugo.v1.storage;
+option go_package = "github.com/afeish/hugo/rpc/pb/storage";
+
+// StorageService is a service for read/write file in block-level.
+service StorageService {
+  rpc Read (Read.Request) returns (Read.Response);
+  rpc StreamRead(Read.Request) returns (stream StreamReadResponse);
+  rpc Write (WriteBlock.Request) returns (WriteBlock.Response);
+  rpc StreamWrite(stream StreamWrite.Request) returns (StreamWrite.Response);
+  rpc DeleteBlock (DeleteBlock.Request) returns (DeleteBlock.Response);
+	rpc ListBlocks (ListBlocks.Request) returns (ListBlocks.Response);
+  rpc EvictBlock(EvictBlock.Request) returns (EvictBlock.Response);
+  rpc RecycleSpace(RecycleSpace.Request) returns (RecycleSpace.Response);
+  rpc Warmup(Warmup.Request) returns (Warmup.Response);
+
+}
+
+//////////////////////////////////////////////////
+
+message Block {
+	string id = 1;
+  bytes data = 2; // block content
+  uint32 len = 3; // length of block
+  uint64 index = 4; // index of current block
+  uint32 crc32 = 5; // crc32 of block
+}
+
+
+//////////////////////////////////////////////////
+
+message Read {
+  message Request {
+    uint64 ino = 1; // read from which file?
+    repeated string block_ids = 4; // the block ids
+  }
+  message Response {
+    repeated Block blocks = 1;
+  }
+}
+
+
+//////////////////////////////////////////////////
+
+message StreamReadResponse {
+  Block block = 1;
+}
+
+//////////////////////////////////////////////////
+
+// WriteOneBlock just write one block at the given index or append to the tail.
+message WriteBlock {
+  message Request {
+    uint64 ino = 1; // write to which file?
+    optional uint64 block_idx = 2; // write which block? if not given, just append
+    bytes block_data = 3; // write a block; create if not exist; overwrite if exist;
+    uint32 crc32 = 5; // crc32 of block
+  }
+  message Response {
+    uint64 ino = 1;
+    uint64 block_idx = 2; // index of written block
+    string block_id = 3; // content hash of the block
+    uint64 vol_id = 4;
+    uint64 node_id = 5;
+    uint32 crc32 = 6;
+    uint64 len = 7;
+  }
+}
+
+//////////////////////////////////////////////////
+
+message StreamWrite {
+  message Header {
+    uint64 ino = 1; // write to which file?
+  }
+  message Request {
+    oneof mode {
+      Header header = 1;
+      bytes block = 2;
+    }
+  }
+  message Response {
+    repeated uint64 block_idx = 2; // index of written block
+  }
+}
+
+message DeleteBlock {
+  message Request {
+    uint64 ino = 1; // read from which file?
+    repeated string block_ids = 4; // the block ids
+  }
+  message Response {
+    repeated string block_ids = 4; // the block ids
+  }
+}
+
+enum BlockState {
+	LOCAL = 0; // local only
+  LOCAL_S3 = 1;  // sync on both
+	S3_ONLY = 2; // s3 only
+}
+
+message ListBlocks {
+	message Request {}
+	message BlockMeta {
+		string block_id = 1;
+		uint64 node_id = 2;
+		uint64 vol_id = 3;
+    uint64 size = 4;
+    BlockState state = 5;
+    uint32 crc = 6;
+	}
+  message Response {
+    repeated BlockMeta blocks = 1;
+  }
+}
+
+message EvictBlock {
+  message Request {
+    uint64 expired = 1;
+  }
+  message Response {
+    repeated string block_ids = 1;
+  }
+}
+
+message RecycleSpace {
+  message Request {
+
+  }
+  message Response {
+    repeated string block_ids = 1;
+  }
+}
+
+message Warmup {
+  message Request {
+
+  }
+  message Response {
+     repeated string block_ids = 1;
+  }
+}

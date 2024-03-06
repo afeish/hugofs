@@ -1,0 +1,86 @@
+syntax = "proto3";
+
+package hugo.v1.meta;
+option go_package = "github.com/afeish/hugo/rpc/pb/meta";
+
+service ClusterService  {
+  rpc AddStorageNode(AddStorageNode.Request) returns (AddStorageNode.Response);
+  rpc GetStorageNode(GetStorageNode.Request) returns (GetStorageNode.Response);
+  rpc ListStorageNodes(ListStorageNodes.Request) returns (ListStorageNodes.Response);
+  rpc GetCandidateStorage(GetCandidateStorage.Request) returns (GetCandidateStorage.Response);
+	rpc PatchStorageNode(PatchStorageNode.Request) returns (PatchStorageNode.Response);
+}
+
+//////////////////////////////////////////////////
+
+message StorageNode {
+  uint64 id = 1; // identify a storage node
+  string ip = 2; // ip of the storage node
+  uint64 port = 3; // port of the storage node
+  uint64 created_at = 4; // created time of the storage node
+  uint64 updated_at = 5; // updated time of the storage node
+  repeated uint64 peers = 6; // peers of the storage node
+  uint64 cap = 7; // capacity of the storage node
+  uint64 usage = 8; // usage of the storage node
+  repeated uint64 physical_volume_ids = 9; // physical volumes in the storage node
+  uint64 tcp_port = 10;
+}
+
+//////////////////////////////////////////////////
+
+message GetStorageNode {
+  message Request {
+    oneof Arg{
+      uint64 id = 1;
+      string address = 2;
+    }
+  }
+  message Response {
+    StorageNode storage_node = 1;
+  }
+}
+
+//////////////////////////////////////////////////
+
+message ListStorageNodes {
+  message Request {}
+  message Response {
+    repeated StorageNode storage_nodes = 1;
+  }
+}
+
+//////////////////////////////////////////////////
+
+message AddStorageNode {
+  message Request {
+    string ip = 1; // ip of the storage node
+    uint64 port = 2; // port of the storage node
+    uint64 cap = 3; // capacity of the storage node
+    uint64 tcp_port = 4;
+  }
+  message Response {
+    StorageNode storage_node = 1;
+  }
+}
+
+//////////////////////////////////////////////////
+
+message GetCandidateStorage {
+  message Request {}
+  message Response {
+    StorageNode primary = 1;
+    StorageNode secondary = 2;
+  }
+}
+
+//////////////////////////////////////////////////
+
+message PatchStorageNode {
+	message Request {
+		uint64 id = 1;
+    map<uint64, uint64> physical_volume_usage = 2;
+	}
+  message Response {
+    StorageNode storage_node = 1;
+  }
+}

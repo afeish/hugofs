@@ -1,0 +1,349 @@
+version: "3.7"
+services:
+  tikv0:
+    image: pingcap/tikv
+    container_name: tikv0
+    command:
+    - --addr=0.0.0.0:20160
+    - --advertise-addr=tikv0:20160
+    - --pd=pd0:2379
+    - --data-dir=/tmp/meta-store/tikv0
+    volumes:
+      - metaStore:/tmp/meta-store
+
+  pd0:
+    image: pingcap/pd:latest
+    container_name: pd0
+    ports:
+      - "2379"
+    depends_on:
+      - tikv0
+    command:
+    - --name=pd0
+    - --client-urls=http://0.0.0.0:2379
+    - --peer-urls=http://0.0.0.0:2380
+    - --advertise-client-urls=http://pd0:2379
+    - --advertise-peer-urls=http://pd0:2380
+    - --data-dir=/tmp/meta-store/pd0
+    volumes:
+      - metaStore:/tmp/meta-store
+
+
+  m1:
+    build:
+      context: ..
+      dockerfile: build/meta.dockerfile
+    restart: always
+    container_name: g_m1
+    hostname: g_m1
+    cap_add:
+      - NET_ADMIN
+      - MKNOD
+      - SYS_PTRACE
+    security_opt:
+      - seccomp:unconfined
+    env_file:
+      - .env
+    depends_on:
+      - pd0
+    environment:
+      - DBNAME=tikv
+      - DBARG=pd0:2379
+      - HOST=m1
+      - PORT=26666
+      - META_URL=m1:26666
+      - HUGO_TRACE_HOST=m1
+      - HUGO_META_ID=m1
+      - HUGO_META_RAFT_DIR=/tmp/meta-store
+      - HUGO_META_BOOTSTRAP=true
+      - HUGO_META_PEERS=m1:26666,m2:26666,m3:26666,m4:26666
+    volumes:
+      - metaStore:/tmp/meta-store
+
+  m2:
+    build:
+      context: ..
+      dockerfile: build/meta.dockerfile
+    restart: always
+    container_name: g_m2
+    hostname: g_m2
+    cap_add:
+      - NET_ADMIN
+      - MKNOD
+      - SYS_PTRACE
+    security_opt:
+      - seccomp:unconfined
+    env_file:
+      - .env
+    depends_on:
+      - pd0
+    environment:
+      - DBNAME=tikv
+      - DBARG=pd0:2379
+      - HOST=m2
+      - PORT=26666
+      - META_URL=m2:26666
+      - HUGO_TRACE_HOST=m2
+      - HUGO_META_ID=m2
+      - HUGO_META_RAFT_DIR=/tmp/meta-store
+      - HUGO_META_PEERS=m1:26666,m2:26666,m3:26666,m4:26666
+    volumes:
+      - metaStore:/tmp/meta-store
+
+  m3:
+    build:
+      context: ..
+      dockerfile: build/meta.dockerfile
+    restart: always
+    container_name: g_m3
+    hostname: g_m3
+    cap_add:
+      - NET_ADMIN
+      - MKNOD
+      - SYS_PTRACE
+    security_opt:
+      - seccomp:unconfined
+    env_file:
+      - .env
+    depends_on:
+      - pd0
+    environment:
+      - DBNAME=tikv
+      - DBARG=pd0:2379
+      - HOST=m3
+      - PORT=26666
+      - META_URL=m3:26666
+      - HUGO_TRACE_HOST=m3
+      - HUGO_META_ID=m3
+      - HUGO_META_RAFT_DIR=/tmp/meta-store
+      - HUGO_META_PEERS=m1:26666,m2:26666,m3:26666,m4:26666
+    volumes:
+      - metaStore:/tmp/meta-store
+
+  m4:
+    build:
+      context: ..
+      dockerfile: build/meta.dockerfile
+    restart: always
+    container_name: g_m4
+    hostname: g_m4
+    cap_add:
+      - NET_ADMIN
+      - MKNOD
+      - SYS_PTRACE
+    security_opt:
+      - seccomp:unconfined
+    env_file:
+      - .env
+    depends_on:
+      - pd0
+    environment:
+      - DBNAME=tikv
+      - DBARG=pd0:2379
+      - HOST=m4
+      - PORT=26666
+      - META_URL=m4:26666
+      - HUGO_TRACE_HOST=m4
+      - HUGO_META_ID=m4
+      - HUGO_META_RAFT_DIR=/tmp/meta-store
+      - HUGO_META_PEERS=m1:26666,m2:26666,m3:26666,m4:26666
+    volumes:
+      - metaStore:/tmp/meta-store
+
+  s1:
+    build:
+      context: ..
+      dockerfile: build/storage.dockerfile
+    restart: always
+    container_name: g_s1
+    hostname: g_s1
+    # ports:
+    #   - "27777:27777"
+    cap_add:
+      - NET_ADMIN
+      - MKNOD
+      - SYS_PTRACE
+    security_opt:
+      - seccomp:unconfined
+    env_file:
+      - .env
+    depends_on:
+      - m1
+      - m2
+      - m3
+      - m4
+    environment:
+      - DBNAME=badger
+      - DBARG=/tmp/storage-store/s1
+      - HOST=s1
+      - PORT=27777
+      - META_URL=m1:26666,m2:26666,m3:26666,m4:26666
+      - HUGO_STORAGE_ADDR=s1:27777
+      - HUGO_TRACE_HOST=s1
+    volumes:
+      - storageStore:/tmp/storage-store
+      - volumeStore:/mnt
+
+  s2:
+    build:
+      context: ..
+      dockerfile: build/storage.dockerfile
+    restart: always
+    container_name: g_s2
+    hostname: g_s2
+    # ports:
+    #   - "27778:27778"
+    cap_add:
+      - NET_ADMIN
+      - MKNOD
+      - SYS_PTRACE
+    security_opt:
+      - seccomp:unconfined
+    env_file:
+      - .env
+    depends_on:
+      - m1
+      - m2
+      - m3
+      - m4
+    environment:
+      - DBNAME=badger
+      - DBARG=/tmp/storage-store/s2
+      - HOST=s2
+      - PORT=27777
+      - META_URL=m1:26666,m2:26666,m3:26666,m4:26666
+      - HUGO_STORAGE_ADDR=s2:27777
+      - HUGO_TRACE_HOST=s2
+    volumes:
+      - storageStore:/tmp/storage-store
+      - volumeStore:/mnt
+
+  s3:
+    build:
+      context: ..
+      dockerfile: build/storage.dockerfile
+    restart: always
+    container_name: g_s3
+    hostname: g_s3
+    cap_add:
+      - NET_ADMIN
+      - MKNOD
+      - SYS_PTRACE
+    security_opt:
+      - seccomp:unconfined
+    env_file:
+      - .env
+    depends_on:
+      - m1
+      - m2
+      - m3
+      - m4
+    environment:
+      - DBNAME=badger
+      - DBARG=/tmp/storage-store/s3
+      - HOST=s3
+      - PORT=27777
+      - META_URL=m1:26666,m2:26666,m3:26666,m4:26666
+      - HUGO_STORAGE_ADDR=s3:27777
+      - HUGO_TRACE_HOST=s3
+    volumes:
+      - storageStore:/tmp/storage-store
+      - volumeStore:/mnt
+
+  c1:
+    build:
+      context: ..
+      dockerfile: build/client.dockerfile
+    restart: always
+    container_name: g_c1
+    hostname: g_c1
+    devices:
+      - /dev/fuse
+    privileged: true
+    cap_add:
+      - NET_ADMIN
+      - MKNOD
+      - SYS_PTRACE
+    security_opt:
+      - seccomp:unconfined
+    depends_on:
+      - m1
+      - m2
+      - m3
+      - m4
+    ports:
+      - 2345:2345
+      - 7070:6060
+    working_dir: /hugo
+    env_file:
+      - .env
+    environment:
+      - MOUNTPOINT=/hugo
+      - META_URL=m1:26666,m2:26666,m3:26666,m4:26666
+      - HUGO_META_ADDR=m1:26666,m2:26666,m3:26666,m4:26666
+      - HUGO_TRACE_HOST=c1
+      - HUGO_TRACE_ENABLED=false
+      # - HUGO_LOG_LEVEL=debug
+    volumes:
+      - clientStore:/tmp/hugo
+      - ../deploy/pjdfstest:/root/pjdfstest
+
+  c2:
+    build:
+      context: ..
+      dockerfile: build/client.dockerfile
+    restart: always
+    container_name: g_c2
+    hostname: g_c2
+    devices:
+      - /dev/fuse
+    privileged: true
+    cap_add:
+      - NET_ADMIN
+      - MKNOD
+      - SYS_PTRACE
+    security_opt:
+      - seccomp:unconfined
+    depends_on:
+      - m1
+      - m2
+      - m3
+      - m4
+    working_dir: /hugo
+    env_file:
+      - .env
+    environment:
+      - MOUNTPOINT=/hugo
+      - META_URL=m1:26666,m2:26666,m3:26666,m4:26666
+      - HUGO_META_ADDR=m1:26666,m2:26666,m3:26666,m4:26666
+      - HUGO_TRACE_HOST=c2
+    volumes:
+      - clientStore:/tmp/hugo
+
+  jaeger:
+    image: jaegertracing/opentelemetry-all-in-one:latest
+    container_name: jaeger
+    hostname: jaeger
+    ports:
+      - "16686:16686" # api
+      - "4317:4317" # grpc
+
+  pyroscope:
+      image: 'pyroscope/pyroscope:latest'
+      container_name: pyroscope
+      hostname: pyroscope
+      environment:
+        - PYROSCOPE_CONFIG=/pyroscope.yaml
+        - PYROSCOPE_LOG_LEVEL=debug
+      ports:
+        - '4040:4040'
+      volumes:
+        - ./pyroscope.yaml:/pyroscope.yaml
+      command:
+        - 'server'
+
+volumes:
+  metaStore:
+  storageStore:
+  volumeStore:
+  clientStore:

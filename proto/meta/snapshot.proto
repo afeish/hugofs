@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+package hugo.v1.meta;
+option go_package = "github.com/afeish/hugo/rpc/pb/meta";
+
+// SnapshotService a snapshot means a read-only VirtualVolume which has a immutable transaction id.
+service SnapshotService {
+  // CreateSnapshot in actually just creates a read-only VirtualVolume.
+  rpc CreateSnapshot (CreateSnapshot.Request) returns (CreateSnapshot.Response);
+  // ListSnapshots lists all snapshots.
+  rpc ListSnapshots (ListSnapshots.Request) returns (ListSnapshots.Response);
+  // DeleteSnapshot deletes a snapshot.
+  rpc DeleteSnapshot (DeleteSnapshot.Request) returns (DeleteSnapshot.Response);
+}
+
+//////////////////////////////////////////////////
+
+message Snapshot {
+  // snapshot id
+  uint64 id = 1;
+  uint64 root_ino = 2;
+  uint64 transaction_id = 3;
+  // key: ino
+  // value: BlockMapRef
+  map<uint64, BlockMapRef> ino_block_maps = 4;
+}
+
+message BlockMapRef {
+  uint64 ino = 1;
+  // key: block index in file
+  // value: transaction_id = 3;
+  map<uint64, uint64> block_map = 3;
+}
+
+//////////////////////////////////////////////////
+
+message CreateSnapshot {
+  message Request {
+    string root_ino = 1; // create a snapshot under a root
+    uint64 transaction_id = 2;
+  }
+  message Response {
+    string snapshot_id = 1; // in actually, it is a virtualVolumeID
+  }
+}
+
+//////////////////////////////////////////////////
+
+message ListSnapshots{
+  message Request {}
+  message Response {
+    repeated Snapshot snapshots = 1;
+  }
+}
+
+//////////////////////////////////////////////////
+
+message DeleteSnapshot {
+  message Request {
+    string snapshot_id = 1;
+  }
+  message Response {}
+}

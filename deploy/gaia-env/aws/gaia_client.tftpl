@@ -1,0 +1,49 @@
+#!/bin/bash
+wget -qO - http://nexus.fastonetech.com/repository/fastone-raw/gpg/public.gpg.key | sudo apt-key add -
+echo "deb [trusted=yes] http://nexus.fastonetech.com/repository/fastone-apt impish main" | sudo tee /etc/apt/sources.list.d/fastone.list > /dev/null
+sudo sed -i -e 's/http:\/\/[^\/]*/http:\/\/mirrors.ustc.edu.cn/g' /etc/apt/sources.list
+sudo apt update && sudo apt install gaia fio rclone -y
+
+tmpdir=`mktemp -d`
+rclone copy fastone:terraform-gaia/bin $tmpdir
+sudo chmod a+x $tmpdir/* && sudo mv $tmpdir/* /usr/bin/ && rm -rf $tmpdir
+
+NVME_DEV=nvme1n1
+if  (lsblk -o NAME,SIZE | grep $NVME_DEV 2>&1 >/dev/null) && ! (mount | grep /dev/$NVME_DEV 2>&1 >/dev/null); then
+    sudo mkfs -t ext4 /dev/$NVME_DEV
+    sudo mkdir -p /mnt/data
+    sudo mount /dev/$NVME_DEV /mnt/data
+fi
+sudo mkdir -p /mnt/data/{gaia,weed}
+sudo chown -R ubuntu:ubuntu /mnt/data
+
+sudo su -c "curl -fsSL https://mirrors.ustc.edu.cn/docker-ce/linux/ubuntu/gpg | gpg --dearmor > /usr/share/keyrings/docker-archive-keyring.gpg"
+sudo su -c 'echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://mirrors.ustc.edu.cn/docker-ce/linux/ubuntu focal stable" > /etc/apt/sources.list.d/docker.list'
+sudo apt update && sudo apt install docker.io docker-compose-plugin -y
+sudo usermod -aG docker ubuntu
+
+sudo tee /tmp/monitoring.yaml <<__EOF__
+services:
+  node-exporter:
+    image: 'r.fastonetech.com:5000/node-exporter:latest'
+    container_name: prometheus-node-exporter
+    restart: 'always'
+    network_mode: 'host'
+    logging:
+      driver: 'json-file'
+      options:
+        max-size: '10m'
+        max-file: '5'
+    volumes:
+      - '/proc:/host/proc'
+      - '/sys:/host/sys'
+      - '/:/rootfs:ro,rslave'
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+      - '--collector.filesystem.ignored-mount-points=^/(sys|proc|dev|host|etc)($$|/)'
+__EOF__
+
+sudo docker compose -f /tmp/monitoring.yaml stop -t 3 || true
+sudo docker compose -f /tmp/monitoring.yaml up -d

@@ -1,0 +1,48 @@
+syntax = "proto3";
+
+package hugo.v1.meta;
+option go_package = "github.com/afeish/hugo/rpc/pb/meta";
+import "google/protobuf/timestamp.proto";
+
+// Event is used for event notification.
+// Clients need to pull event actively,
+// server doesn't push event to client.
+service EventService {
+  rpc PullLatest(PullLatest.Request) returns (PullLatest.Response) {}
+}
+
+//////////////////////////////////////////////////
+
+message Event {
+  enum Type {
+    INVALID = 0;
+    NEW_FILE_INODE = 1;
+    NEW_DIR_INODE = 2;
+    REMOVE_FILE_INODE = 3;
+    REMOVE_DIR_INODE = 4;
+    REMOVE_DIR_CHILDREN = 5;
+    UPDATE_ATTR = 6;
+  }
+  // id is the unique id of event and it is monotonic increasing.
+  int64 id = 1;
+  // type is the type of event.
+  Type type = 2;
+  // parent_ino represents the parent inode of the event.
+  uint64 parent_ino = 3;
+  // cur_ino represents the current inode of the event.
+  uint64 cur_ino = 4;
+  // name represents the name of the event.
+  string name = 5;
+}
+
+//////////////////////////////////////////////////
+
+// PullLatest is used for pulling latest events.
+message PullLatest {
+  message Request {
+    int64 current_event_id = 1;
+  }
+  message Response {
+    repeated Event events = 1;
+  }
+}

@@ -1,0 +1,385 @@
+syntax = "proto3";
+
+package hugo.v1.meta;
+option go_package = "github.com/afeish/hugo/rpc/pb/meta";
+
+// InternalStorageMeta is the meta service of storage.
+// It should only be used by storage.
+// It is also implemented by the metadata server.
+service StorageMeta {
+  // load storage configuration
+  rpc LoadConfiguration(LoadConfiguration.Request) returns (LoadConfiguration.Response);
+  // Statistics returns usage.
+  rpc Statistics(Statistics.Request) returns (Statistics.Response);
+
+  //////////////////////////////////////////////////
+  // BeginTransaction will result the transaction_id increase.
+  // Make each virtual volume holds a separate transaction to avoid overflow.
+  rpc BeginTransaction(BeginTransaction.Request) returns (BeginTransaction.Response);
+  // CommitTransaction will commit the transaction to make the change visible.
+  // By removing the given transaction id from the active transaction list.
+  rpc CommitTransaction(CommitTransaction.Request) returns (CommitTransaction.Response);
+  // RollbackTransaction will rollback the transaction, by deleting the changes with the given transaction id.
+  rpc RollbackTransaction(RollbackTransaction.Request) returns (RollbackTransaction.Response);
+  //////////////////////////////////////////////////
+
+  //////////////////////////////////////////////////
+  // GetPhysicalVolume gets the physical volume by id. At present cannot know the history of the physical volume.
+  rpc GetPhysicalVolume(GetPhysicalVolume.Request) returns (GetPhysicalVolume.Response);
+  // Get the virtual volume by id. At present cannot know the history of the virtual volume.
+  rpc GetVirtualVolume(GetVirtualVolume.Request) returns (GetVirtualVolume.Response);
+  // ListPhysicalVolumes lists all physical volumes.
+  rpc ListPhysicalVolumes(ListPhysicalVolumes.Request) returns (ListPhysicalVolumes.Response);
+  // ListVirtualVolume lists all virtual volumes.
+  rpc ListVirtualVolume(ListVirtualVolume.Request) returns (ListVirtualVolume.Response);
+  //////////////////////////////////////////////////
+
+  //////////////////////////////////////////////////
+  // GetLatestInoBlockMap gets the block map of a file with a transaction id.
+  // If no transaction id is given, it will return the latest block map.
+  rpc GetInoBlockMap(GetInoBlockMap.Request) returns (GetInoBlockMap.Response);
+	rpc GetHistoryBlockMap(GetInoBlockMap.Request) returns (GetInoBlockMap.Response);
+  // GetInoBlockMeta gets the block metadata, with the transaction_id, we can have a history view of the file.
+  rpc GetInoBlockMeta(GetInoBlockMeta.Request) returns (GetInoBlockMeta.Response);
+  //////////////////////////////////////////////////
+
+  //////////////////////////////////////////////////
+  // UpdateBlockLocation updates the block location of a file.
+  rpc UpdateBlockLocation(UpdateBlockLocation.Request) returns (UpdateBlockLocation.Response);
+  // BatchUpdateBlockLocation updates the block location of a file.
+  rpc BatchUpdateBlockLocation(BatchUpdateBlockLocation.Request) returns (BatchUpdateBlockLocation.Response);
+  //////////////////////////////////////////////////
+
+  //////////////////////////////////////////////////
+  // CreatePhysicalVolume creates a physical volume.
+  rpc CreatePhysicalVolume(CreatePhysicalVolume.Request) returns (CreatePhysicalVolume.Response);
+	// PatchPhysicalVolume patch the update of the physical volume
+	rpc PatchPhysicalVolume(PatchPhysicalVolume.Request) returns (PatchPhysicalVolume.Response);
+  // CreateVirtualVolume creates a virtual volume.
+  rpc CreateVirtualVolume(CreateVirtualVolume.Request) returns (CreateVirtualVolume.Response);
+  // CreateReadOnlyVirtualVolume creates a read only virtual volume.
+  rpc CreateReadOnlyVirtualVolume(CreateReadOnlyVirtualVolume.Request) returns (CreateReadOnlyVirtualVolume.Response);
+  //////////////////////////////////////////////////
+
+  //////////////////////////////////////////////////
+  // BindPhysicalVolToVirtualVol binds physical volumes to a virtual volume.
+  rpc BindPhysicalVolToVirtualVol(BindPhysicalVolToVirtualVol.Request) returns (BindPhysicalVolToVirtualVol.Response);
+  // UnBindPhysicalVolToVirtualVol unbinds physical volumes from a virtual volume.
+  rpc UnBindPhysicalVolToVirtualVol(UnBindPhysicalVolToVirtualVol.Request) returns (UnBindPhysicalVolToVirtualVol.Response);
+  //////////////////////////////////////////////////
+
+  //////////////////////////////////////////////////
+  // HeartBeat is a heartbeat of the storage node.
+  // It can be used to check the health of the storage node.
+  // It is also used to distribute event to the storage node.
+  rpc HeartBeat(stream HeartBeat.Request) returns (stream HeartBeat.Response);
+}
+
+
+//////////////////////////////////////////////////
+
+message VirtualVolume {
+  uint64 id = 1; // identify a virtual volume
+  uint64 cap_byte = 2; // capacity of the virtual volume
+  uint64 usage_byte = 3; // usage of the virtual volume
+  uint64 created_at = 4; // created time of the virtual volume
+  repeated uint64 physical_volume_ids = 5; // physical volumes in the virtual volume
+  bool read_only = 6; // read only or not
+  bool migrate_locked = 7; // used to exclusive a migrate
+}
+
+message PhysicalVolume {
+  uint64 id = 1; // identify a physical volume
+  uint64 cap_byte = 2; // capacity of the physical volume
+  uint64 usage_byte = 3; // usage of the physical volume
+  uint64 created_at = 4; // created time of the physical volume
+  uint64 virtual_volume_id = 5; // virtual volume of the physical volume
+  uint64 storage_node_id = 6; // storage node of the physical volume
+  bool lock = 7; // when the physical volume is locked, it cannot be used; we should lock it when do gc.
+  string prefix = 8;
+  double threhold = 9; // threshold when to trigger a compact of blocks
+	EngineType type = 10; // type of the storage engine
+}
+
+//////////////////////////////////////////////////
+
+message InoBlockMap {
+  uint64 ino = 1;
+  // key of the map: block index in the file
+  map<uint64, BlockMeta>map = 2;
+}
+
+message BlockMeta {
+  uint64 ino = 1;
+  uint64 virtual_volume_id = 2; // identify a virtual volume
+  uint64 block_index_in_file = 3;
+  uint64 primary_volume_id = 4; // identify a physical volume
+	repeated uint64 secondary_volume_ids = 5; //
+  uint64 txn_id = 7; // transaction id
+  uint64 len = 8;
+  uint32 crc32 = 9;
+  uint64 created_at = 10; // created time of the block
+  optional string cloud_addr = 11; // key of the block in the cloud storage
+  string block_id = 12; // unique identifier of block
+}
+
+//////////////////////////////////////////////////
+
+message LoadConfiguration {
+  message Request {}
+  message Response {
+    repeated VirtualVolume virtual_volumes = 3;
+    repeated PhysicalVolume physical_volumes = 4;
+  }
+}
+
+//////////////////////////////////////////////////
+
+message Statistics {
+  message Request {}
+  message Response {
+    uint64 cap = 1;
+    uint64 usage = 2;
+    uint64 total_file_cnt = 3;
+  }
+}
+
+//////////////////////////////////////////////////
+
+// Transaction describes a transaction format.
+message Transaction {
+  uint64 id = 1;
+  enum State {
+    INVALID = 0;
+    ACTIVE = 1;
+    COMMITTED = 2;
+  }
+  State state = 2;
+  repeated uint64 other_active_transaction_ids = 3;
+}
+
+message BeginTransaction {
+  message Request {
+    // make each virtual volume hold a transaction
+    uint64 virtual_volume_id = 1;
+    uint64 ino = 2;
+  }
+  message Response {
+    uint64 transaction_id = 1;
+  }
+}
+
+message CommitTransaction {
+  message Request {
+    uint64 virtual_volume_id = 1;
+    uint64 transaction_id = 2;
+    uint64 ino = 3;
+  }
+  message Response {}
+}
+
+message RollbackTransaction {
+  message Request {
+    uint64 virtual_volume_id = 1;
+    uint64 transaction_id = 2;
+    uint64 ino = 3;
+  }
+  message Response {}
+}
+
+//////////////////////////////////////////////////
+
+message GetPhysicalVolume {
+  message Request {
+    uint64 id = 1;
+  }
+  message Response {
+    PhysicalVolume physical_volume = 1;
+  }
+}
+
+message GetVirtualVolume {
+  message Request {
+    uint64 id = 1;
+  }
+  message Response {
+    VirtualVolume virtual_volume = 1;
+  }
+}
+
+//////////////////////////////////////////////////
+
+message ListPhysicalVolumes {
+  message Request {
+    uint64 storage_node_id = 2;
+  }
+  message Response {
+    repeated PhysicalVolume physical_volumes = 1;
+  }
+}
+
+message ListVirtualVolume {
+  message Request {}
+  message Response {
+    repeated VirtualVolume virtual_volumes = 1;
+  }
+}
+
+//////////////////////////////////////////////////
+
+enum EngineType {
+	INVALID = 0;
+	FS = 1; // local fs
+	INMEM = 2; // in-memory fs
+}
+
+message CreatePhysicalVolume {
+  message Request {
+    uint64 storage_node_id = 2;
+		EngineType type = 3; // volume type
+		string prefix = 4; // location of the mount point
+		optional uint64 quota = 5; // quota of storage size
+		optional double threhold = 6; // max threhold when triggering the eviction
+  }
+  message Response {
+    PhysicalVolume physical_volume = 1;
+  }
+}
+
+message PatchPhysicalVolume {
+  message Request {
+		uint64 id = 1;
+    uint64 storage_node_id = 2;
+		EngineType type = 3; // volume type
+		string prefix = 4; // location of the mount point
+		optional uint64 quota = 5; // quota of storage size
+		optional double threhold = 6; // max threhold when triggering the eviction
+  }
+  message Response {
+    PhysicalVolume physical_volume = 1;
+  }
+}
+
+message CreateVirtualVolume {
+  message Request {
+    uint64 cap = 1;
+  }
+  message Response {
+    VirtualVolume virtual_volume = 1;
+  }
+}
+
+message CreateReadOnlyVirtualVolume {
+  message Request {
+    uint64 root_ino = 1;
+  }
+  message Response {
+    VirtualVolume virtual_volume = 1;
+  }
+}
+
+//////////////////////////////////////////////////
+
+message GetInoBlockMap {
+  message Request {
+    uint64 ino = 1;
+  }
+  message Response {
+    uint64 virtual_volume_id = 1;
+    InoBlockMap ino_block_map = 2;
+  }
+}
+message GetInoBlockMeta {
+  message Request {
+    uint64 ino = 1; // which file?
+    uint64 index = 2; // block index in the file
+  }
+  message Response {
+    BlockMeta block_meta = 1;
+  }
+}
+
+//////////////////////////////////////////////////
+
+
+// UpdateBlockLocation must be invoked in a transaction.
+message UpdateBlockLocation {
+  message Request {
+    BlockMeta meta = 2;
+  }
+  message Response {}
+}
+
+// BatchUpdateBlockLocation must be invoked in a transaction.
+message BatchUpdateBlockLocation {
+  message Request {
+    uint64 transaction_id = 1;
+    repeated BlockMeta metas = 2;
+  }
+  message Response {}
+}
+
+//////////////////////////////////////////////////
+
+message BindPhysicalVolToVirtualVol {
+  message Request {
+    uint64 physical_volume_id = 1;
+    uint64 virtual_volume_id = 2;
+  }
+  message Response {}
+}
+
+message UnBindPhysicalVolToVirtualVol {
+  message Request {
+    uint64 physical_volume_id = 1;
+    uint64 virtual_volume_id = 2;
+  }
+  message Response {}
+}
+
+//////////////////////////////////////////////////
+
+message HeartBeat {
+  // client send report to server
+  message Request {
+    message UsageReport {
+      // report the usage of each physical volume
+      map<uint64, uint64> physical_volume_usage = 1;
+    }
+    // report the usage of each physical volume.
+    UsageReport reports = 1;
+    // identify the source of the request.
+    uint64 node_id = 2;
+  }
+
+  // server push notification to client
+  message Response {
+    message ServerNotification {
+      enum Type {
+        INVALID = 0;
+        MODIFIED_VIRTUAL_VOLUME = 1;
+        MODIFIED_PHYSICAL_VOLUME = 2;
+        MODIFIED_NODE = 3;
+      }
+      Type type = 1;
+      optional uint64 virtual_volume_id = 2;
+      optional uint64 physical_volume_id = 3;
+    }
+    message GCMessage {
+      // When delete a file is deleted reduce the ReferenceCount of the InoAttr,
+      // when the ReferenceCount is 0, means no snapshot point to the ino,
+      // then we can delete all the InoAttr and the InoBlockMap.
+      //
+      // When the ReferenceCount is not 0, we still try to delete some data.
+      // We will check if one Block is referenced, if not, we can delete the Block.
+      repeated InoBlockMap inoBlockMaps = 1;
+    }
+    oneof res{
+      ServerNotification notifications = 1;
+      GCMessage gc = 2;
+    }
+  }
+}
+
+//////////////////////////////////////////////////
+

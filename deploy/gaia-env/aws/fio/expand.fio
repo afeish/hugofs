@@ -1,0 +1,14 @@
+[expand]
+rw=write
+size=8g
+numjobs=4
+bs=16m
+ioengine=sync
+iodepth=32
+fallocate=0
+time_based
+runtime=60
+direct=1
+filename_format=__testfile'$jobnum'
+thread
+directory=/home/ubuntu/gaia

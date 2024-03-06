@@ -1,0 +1,118 @@
+stages:
+  - "test"
+  - "build"
+  - "release"
+
+variables:
+  GIT_SUBMODULE_STRATEGY: recursive
+  GOPROXY: "https://goproxy.cn,direct"
+  GOPATH: $CI_PROJECT_DIR/.go
+  DOCKER_HOST: tcp://127.0.0.1:2376
+  DOCKER_TLS_CERTDIR: "/certs"
+  DOCKER_TLS_VERIFY: 1
+  DOCKER_CERT_PATH: "$DOCKER_TLS_CERTDIR/client"
+  BUILD_TIME: ""
+
+
+.build:
+  tags:
+    - cs-runner
+  cache:
+    key: go1.21
+    paths:
+      - .go/pkg/mod/
+      - $GOPATH
+
+test:
+  extends: .build
+  stage: test
+  allow_failure: true
+  image: neochen.store/bases/golang:1.21-bullseye
+  script:
+    - sed -i -e 's/http:\/\/[^\/]*/http:\/\/mirrors.ustc.edu.cn/g' /etc/apt/sources.list && apt update && apt install fuse -y
+    - make test
+  timeout: 30m
+
+test-race:
+  extends: .build
+  stage: test
+  allow_failure: true
+  image: neochen.store/bases/golang:1.21-bullseye
+  script:
+    - sed -i -e 's/http:\/\/[^\/]*/http:\/\/mirrors.ustc.edu.cn/g' /etc/apt/sources.list && apt update && apt install fuse -y
+    - make test-race
+  timeout: 30m
+
+test-posix:
+  extends: .build
+  stage: test
+  allow_failure: true
+  image: neochen.store/tools/pjdfstest-build:1.21
+  script:
+    - make pjdfstest.run
+  timeout: 30m
+
+build:
+  extends: .build
+  variables:
+    GOPATH: $CI_PROJECT_DIR/.go
+  stage: "build"
+  image: neochen.store/bases/golang:1.21-bullseye
+  needs: []
+  script:
+    - git config --global url.https://gitlab-ci-token:${CI_JOB_TOKEN}@${CI_SERVER_HOST}.insteadOf https://${CI_SERVER_HOST}
+    - export GOPRIVATE=${CI_SERVER_HOST}
+    - make hugo
+  timeout: 30m
+  artifacts:
+    untracked: false
+    expire_in: 1 days
+    paths:
+      - bin/*
+
+pages:
+  stage: build
+  image: neochen.store/tools/mdbook:0910
+  variables:
+    CARGO_HOME: $CI_PROJECT_DIR/cargo
+  script:
+    - mdbook build -d ../public docs
+  tags:
+    - container
+  artifacts:
+    paths:
+      - public
+  cache:
+    paths:
+      - $CARGO_HOME/bin
+
+release snapshot:
+  extends: .build
+  stage: release
+  image: neochen.store/tools/go-builder:1.21r
+  needs: []
+  allow_failure: true
+  only:
+    - /^release\/.*$/
+    - main
+    - master
+  script:
+    - export
+    - make snapshot
+  artifacts:
+    paths:
+      - dist/
+    expire_in: 1 d
+
+
+release:
+  extends: .build
+  stage: release
+  image: neochen.store/tools/go-builder:1.21r
+  needs: []
+  only:
+    - tags
+    - /^release\/.*$/
+  script:
+    - export
+    - make release

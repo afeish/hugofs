@@ -1,0 +1,152 @@
+#!/bin/bash
+wget -qO - http://nexus.fastonetech.com/repository/fastone-raw/gpg/public.gpg.key | sudo apt-key add -
+echo "deb [trusted=yes] http://nexus.fastonetech.com/repository/fastone-apt impish main" | sudo tee /etc/apt/sources.list.d/fastone.list > /dev/null
+sudo sed -i -e 's/http:\/\/[^\/]*/http:\/\/mirrors.ustc.edu.cn/g' /etc/apt/sources.list
+sudo apt update && sudo apt install gaia rclone -y
+
+tmpdir=`mktemp -d`
+rclone copy fastone:terraform-gaia/bin $tmpdir
+sudo chmod a+x $tmpdir/* && sudo mv $tmpdir/* /usr/bin/ && rm -rf $tmpdir
+
+NVME_DEV=nvme1n1
+if  (lsblk -o NAME,SIZE | grep $NVME_DEV 2>&1 >/dev/null) && ! (mount | grep /dev/$NVME_DEV 2>&1 >/dev/null); then
+    sudo mkfs -t ext4 /dev/$NVME_DEV
+    sudo mkdir -p /mnt/data
+    sudo mount /dev/$NVME_DEV /mnt/data
+fi
+sudo mkdir -p /mnt/data/{gaia,weed}
+sudo chown -R ubuntu:ubuntu /mnt/data
+
+sudo su -c "curl -fsSL https://mirrors.ustc.edu.cn/docker-ce/linux/ubuntu/gpg | gpg --dearmor > /usr/share/keyrings/docker-archive-keyring.gpg"
+sudo su -c 'echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://mirrors.ustc.edu.cn/docker-ce/linux/ubuntu focal stable" > /etc/apt/sources.list.d/docker.list'
+sudo apt update && sudo apt install docker.io docker-compose-plugin -y
+sudo usermod -aG docker ubuntu
+
+sudo tee /tmp/pyroscope.yaml <<__EOF__
+---
+cors:
+  allowed-origins:
+    ['*']
+  allowed-methods: ['OPTIONS', 'GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE']
+  allowed-headers:
+    ['Content-Type', 'Accept', 'Accept-Language', 'Content-Language', 'Origin']
+  allow-credentials: true
+__EOF__
+
+sudo mkdir -p /tmp/grafana/provisioning/datasources
+sudo tee /tmp/grafana/provisioning/datasources/prometheus_ds.yml <<__EOF__
+datasources:
+- name: Prometheus
+  access: proxy
+  type: prometheus
+  url: http://localhost:9090
+  isDefault: true
+__EOF__
+
+sudo tee /tmp/monitoring.yaml <<__EOF__
+services:
+  node-exporter:
+    image: 'r.fastonetech.com:5000/node-exporter:latest'
+    container_name: prometheus-node-exporter
+    restart: 'always'
+    network_mode: 'host'
+    logging:
+      driver: 'json-file'
+      options:
+        max-size: '10m'
+        max-file: '5'
+    volumes:
+      - '/proc:/host/proc'
+      - '/sys:/host/sys'
+      - '/:/rootfs:ro,rslave'
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+      - '--collector.filesystem.ignored-mount-points=^/(sys|proc|dev|host|etc)($$|/)'
+  jaeger:
+    image: jaegertracing/opentelemetry-all-in-one:latest
+    container_name: jaeger
+    hostname: jaeger
+    ports:
+      - "16686:16686" # api
+      - "4317:4317" # grpc
+
+  pyroscope:
+      image: 'pyroscope/pyroscope:latest'
+      container_name: pyroscope
+      hostname: pyroscope
+      environment:
+        - PYROSCOPE_CONFIG=/pyroscope.yaml
+        - PYROSCOPE_LOG_LEVEL=debug
+      ports:
+        - '4040:4040'
+      volumes:
+        - ./pyroscope.yaml:/pyroscope.yaml
+      command:
+        - 'server'
+  
+  prometheus:
+    image: 'r.fastonetech.com:5000/prometheus:latest'
+    container_name: prometheus
+    restart: 'always'
+    network_mode: 'host'
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.size=4GB'
+      - '--storage.tsdb.retention.time=1d'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    logging:
+      driver: 'json-file'
+      options:
+        max-size: '10m'
+        max-file: '5'
+    volumes:
+      - '/tmp/prometheus/config:/etc/prometheus'
+
+  grafana:
+    image: 'grafana/grafana-oss'
+    container_name: grafana
+    restart: 'always'
+    network_mode: 'host'
+    logging:
+      driver: 'json-file'
+      options:
+        max-size: '10m'
+        max-file: '5'
+    ports:
+      - "3000:3000" # api   
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: 'admin'
+      GF_AUTH_ANONYMOUS_ENABLED: true
+    volumes:
+      - '/tmp/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources'
+
+__EOF__
+
+
+sudo mkdir -p /tmp/grafana/data
+sudo mkdir -p /tmp/prometheus/{data,config}
+sudo tee /tmp/prometheus/config/prometheus.yml <<__EOF__
+global:
+  scrape_interval:     15s
+  evaluation_interval: 15s
+scrape_configs:
+    - job_name: 'node_exporter'
+      scrape_interval: 5s
+      static_configs:
+      - targets:
+        %{ for addr in ip_addrs ~}
+        - ${addr}
+        %{ endfor ~}
+    
+    - job_name: 'prometheus'
+      scrape_interval: 5s
+      static_configs:
+        - targets: ['localhost:9090']
+__EOF__
+
+sudo docker compose -f /tmp/monitoring.yaml stop -t 3 || true
+sudo docker compose -f /tmp/monitoring.yaml up -d

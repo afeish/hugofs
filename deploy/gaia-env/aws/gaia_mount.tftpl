@@ -1,0 +1,8 @@
+#!/bin/bash
+sudo apt update && sudo apt install gaia
+export TRACING_BACKEND_URL=${otel_addr}:4317
+export OTEL_TRACES_SAMPLER=parentbased_traceidratio
+export OTEL_TRACES_SAMPLER_ARG=0.01
+export PYROSCOPE_URL=http://${otel_addr}:4040
+export GAIA_HOST=${host}
+gaia mount --mp $HOME/gaia --maddr ${meta_addrs}

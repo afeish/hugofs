@@ -1,0 +1,114 @@
+project_name: hugo
+
+release:
+  prerelease: auto
+  extra_files:
+    - glob: "./bin/*.exe"
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - <<: &build_defaults
+      main: .
+      binary: bin/hugo
+      env:
+        - CGO_ENABLED=0
+      ldflags:
+        - -X github.com/afeish/hugo/cmd.Version={{.Version}} -X github.com/afeish/hugo/cmd.BuildTime={{time "2006-01-02"}}
+    id: linux
+    goos: [linux]
+    goarch: [amd64]
+
+archives:
+  - id: nix
+    builds: [linux]
+    <<: &archive_defaults
+      name_template: "{{ .ProjectName }}-{{ .Version }}-{{ .Os }}-{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}"
+      wrap_in_directory: false
+    format: tar.gz
+
+nfpms:
+  - id: deb
+    <<: &nfpm_defaults
+      package_name: hugo
+      file_name_template: "{{ .ProjectName }}-{{ .Version }}-{{ .Os }}-{{ .Arch }}"
+      vendor: ellis.chen
+      maintainer: ellis.chen<ellis.chen00@gmail.com>
+      homepage: https://github.com/afeish00/hugo
+      description: hugo is a high-performance distributed and cloud-native file system which is more efficient and powerful than [juiceFs](https://www.juicefs.com/en/)
+      license: MIT
+      bindir: /usr
+    formats:
+      - deb
+  - <<: *nfpm_defaults
+    id: rpm
+    formats:
+      - rpm
+
+publishers:
+- name: nexus-apt
+  ids:
+    - deb
+  cmd: >-
+    curl -v -k -u "{{ .Env.NEXUS_USERNAME }}:{{ .Env.NEXUS_PASSWORD }}"
+      -H "Content-Type: multipart/form-data"
+      --data-binary "@{{ .ArtifactName }}"
+      "http://nexus.neochen.store/repository/ellis.chen-apt/"
+
+  dir: "{{ dir .ArtifactPath }}"
+
+- name: nexus-rpm
+  ids:
+    - rpm
+  cmd: >-
+    curl -v -k -u "{{ .Env.NEXUS_USERNAME }}:{{ .Env.NEXUS_PASSWORD }}"
+      --upload-file "{{ .ArtifactName }}"
+      "http://nexus.neochen.store/repository/ellis.chen-yum/hugo/"
+  dir: "{{ dir .ArtifactPath }}"
+
+
+checksum:
+  name_template: "checksums.txt"
+snapshot:
+  name_template: "{{ .Tag }}"
+changelog:
+  sort: asc
+  groups:
+  - title: Features
+    regexp: '^.*?feat(\([[:word:]]+\))??!?:.+$'
+    order: 0
+  - title: 'Bug fixes'
+    regexp: '^.*?fix(\([[:word:]]+\))??!?:.+$'
+    order: 1
+  - title: Others
+    order: 999
+  filters:
+    exclude:
+      - >
+        ^docs(\(.*\))*:
+      - >
+        ^test(\(.*\))*:
+      - "^Merge branch"
+      - "^chore"
+      - "^Update README.md"
+      - "^Topic"
+      - "^temp"
+      - "^update"
+
+# gitlab_urls:
+#   api: https://github.com:8443/
+#   download: https://github.com:8443/
+#   skip_tls_verify: false
+#   use_package_registry: false
+#   use_job_token: true
+
+# blobs:
+#   -
+#     provider: s3
+#     region: cn-northwest-1
+#     disableSSL: true
+#     bucket: tools
+#     ids:
+#     - pkgs

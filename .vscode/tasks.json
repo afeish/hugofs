@@ -1,0 +1,17 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "hugo:umount",
+			"type": "shell",
+			"command": "sudo umount /tmp/hugo >/dev/null  2>&1 || true",
+			"presentation": {
+				"reveal": "never",
+				"focus": false,
+				"panel": "shared",
+				"showReuseMessage": false,
+				"clear": true
+			},
+		}
+	]
+}

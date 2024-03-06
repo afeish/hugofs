@@ -1,0 +1,30 @@
+run:
+  concurrency: 4
+  timeout: 5m
+  issues-exit-code: 1
+  tests: false
+  go: '1.19'
+linters:
+  disable:
+    - structcheck
+    - rowserrcheck
+    - varcheck
+  enable:
+    - deadcode
+    - unused
+    - ineffassign
+    - typecheck
+    - gosimple
+    - goimports
+    - errcheck
+    - staticcheck
+    - stylecheck
+    - gosec
+    - asciicheck
+    - bodyclose
+    - exportloopref
+    - makezero
+    - durationcheck
+    - prealloc
+    - predeclared
+
