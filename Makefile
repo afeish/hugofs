@@ -119,6 +119,16 @@ umount:
 	$Q file /tmp/hugo
 	$Q ls /tmp/hugo
 
+docker:
+	docker build -t neocxf/hugofs-meta -f build/meta.dockerfile .
+	docker build -t neocxf/hugofs-client -f build/client.dockerfile .
+	docker build -t neocxf/hugofs-storage -f build/storage.dockerfile .
+
+docker.push: docker
+	docker push neocxf/hugofs-meta
+	docker push neocxf/hugofs-client
+	docker push neocxf/hugofs-storage
+
 debug: hugo
 
 define docker_up
