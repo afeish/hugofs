@@ -1,14 +1,7 @@
 # hugo
 
-A high-performance distributed and cloud-native file system which is more efficient and powerful
-than [juiceFs](https://www.juicefs.com/en/).
+A high-performance distributed and cloud-native file system.
 
-[BOOK](http://ellis.chen.git-pages.neochen.store:9443/hugo)
-
-Run godoc to check the documentation.
-
-```shell
-make godoc
 ```
 
 ## Features(Desires):
@@ -21,5 +14,4 @@ make godoc
 
 ## Effect
 
-<video src="misc/hugofs.mp4" width="320" height="240" controls></video>
-
+<div style="padding:56.25% 0 0 0;position:relative;"><iframe src="https://player.vimeo.com/video/919999372?badge=0&amp;autopause=0&amp;player_id=0&amp;app_id=58479" frameborder="0" allow="autoplay; fullscreen; picture-in-picture; clipboard-write" style="position:absolute;top:0;left:0;width:100%;height:100%;" title="hugofs"></iframe></div><script src="https://player.vimeo.com/api/player.js"></script>
