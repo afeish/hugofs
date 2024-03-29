@@ -17,6 +17,6 @@ A high-performance distributed and cloud-native file system.
 
 ## Effect
 
-[![Little red ridning hood](https://i.stack.imgur.com/XCRlR.png)](https://vimeo.com/919999372?share=copy "Little red riding hood - Click to Watch!")
+[![hugofs introduction](misc/thumbnail.png)](https://vimeo.com/928748786?share=copy "Little red riding hood - Click to Watch!")
 
 
